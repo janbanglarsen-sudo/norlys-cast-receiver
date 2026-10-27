@@ -18,7 +18,7 @@
 <body>
   <cast-media-player></cast-media-player>
   <script>
-    const VERSION = "2026-10-28.2";
+    const VERSION = "2026-10-28.3";
     const NS = "urn:x-cast:dk.banglarsen.norlysremote";
     const context = cast.framework.CastReceiverContext.getInstance();
     const player = context.getPlayerManager();
@@ -34,7 +34,8 @@
       if (req.media.contentType === "application/dash+xml" || /\.mpd(\?|$)/.test(req.media.contentId)) {
         req.media.contentType = "application/dash+xml";
       }
-      if (req.senderId) context.sendCustomMessage(NS, req.senderId, { type: "LOAD_INFO", version: VERSION, tuning });
+      // LOAD requests carry no senderId, so broadcast (undefined = all connected senders).
+      context.sendCustomMessage(NS, undefined, { type: "LOAD_INFO", version: VERSION, tuning });
       return req;
     });
 
