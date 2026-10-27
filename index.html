@@ -1,0 +1,48 @@
+<!doctype html>
+<!--
+  Norlys Remote – custom Cast receiver (Google CAF).
+  Host on HTTPS (GitHub Pages) and register the URL in the Google Cast SDK Developer Console
+  as a "Custom Receiver"; the app id it gives you goes into the app's settings.
+  The sender passes the Widevine license URL in LOAD.customData.licenseUrl.
+-->
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="https://www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
+  <style>
+    body { margin: 0; background: #000; }
+    cast-media-player { --splash-image: none; --logo-image: none; --theme-hue: 355; }
+  </style>
+</head>
+<body>
+  <cast-media-player></cast-media-player>
+  <script>
+    const context = cast.framework.CastReceiverContext.getInstance();
+    const player = context.getPlayerManager();
+    let licenseUrl = null;
+
+    player.setMessageInterceptor(cast.framework.messages.MessageType.LOAD, (req) => {
+      const data = req.customData || {};
+      licenseUrl = data.licenseUrl || null;
+      req.media.streamType = cast.framework.messages.StreamType.LIVE;
+      if (req.media.contentType === "application/dash+xml" || /\.mpd(\?|$)/.test(req.media.contentId)) {
+        req.media.contentType = "application/dash+xml";
+      }
+      return req;
+    });
+
+    player.setMediaPlaybackInfoHandler((loadRequest, playbackConfig) => {
+      if (licenseUrl) {
+        playbackConfig.protectionSystem = cast.framework.ContentProtection.WIDEVINE;
+        playbackConfig.licenseUrl = licenseUrl;
+      }
+      return playbackConfig;
+    });
+
+    const options = new cast.framework.CastReceiverOptions();
+    options.disableIdleTimeout = true; // flow-TV: keep the session alive between channel switches
+    options.maxInactivity = 3600;
+    context.start(options);
+  </script>
+</body>
+</html>
