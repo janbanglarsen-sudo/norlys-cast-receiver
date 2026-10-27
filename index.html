@@ -3,7 +3,8 @@
   Norlys Remote – custom Cast receiver (Google CAF).
   Host on HTTPS (GitHub Pages) and register the URL in the Google Cast SDK Developer Console
   as a "Custom Receiver"; the app id it gives you goes into the app's settings.
-  The sender passes the Widevine license URL in LOAD.customData.licenseUrl.
+  The sender passes the Widevine license URL in LOAD.customData.licenseUrl and, optionally,
+  start-up tuning in LOAD.customData.tuning (see TUNING below).
 -->
 <html>
 <head>
@@ -17,17 +18,23 @@
 <body>
   <cast-media-player></cast-media-player>
   <script>
+    const VERSION = "2026-10-28.2";
+    const NS = "urn:x-cast:dk.banglarsen.norlysremote";
     const context = cast.framework.CastReceiverContext.getInstance();
     const player = context.getPlayerManager();
     let licenseUrl = null;
+    // TUNING (all optional): { initialBandwidth: bits/s, rebufferingGoal: s, ignoreMinBufferTime: bool }
+    let tuning = {};
 
     player.setMessageInterceptor(cast.framework.messages.MessageType.LOAD, (req) => {
       const data = req.customData || {};
       licenseUrl = data.licenseUrl || null;
+      tuning = data.tuning || {};
       req.media.streamType = cast.framework.messages.StreamType.LIVE;
       if (req.media.contentType === "application/dash+xml" || /\.mpd(\?|$)/.test(req.media.contentId)) {
         req.media.contentType = "application/dash+xml";
       }
+      if (req.senderId) context.sendCustomMessage(NS, req.senderId, { type: "LOAD_INFO", version: VERSION, tuning });
       return req;
     });
 
@@ -36,12 +43,20 @@
         playbackConfig.protectionSystem = cast.framework.ContentProtection.WIDEVINE;
         playbackConfig.licenseUrl = licenseUrl;
       }
+      if (tuning.initialBandwidth) playbackConfig.initialBandwidth = tuning.initialBandwidth;
+      if (tuning.rebufferingGoal !== undefined || tuning.ignoreMinBufferTime) {
+        playbackConfig.shakaConfig = {
+          streaming: tuning.rebufferingGoal !== undefined ? { rebufferingGoal: tuning.rebufferingGoal } : {},
+          manifest: { dash: { ignoreMinBufferTime: !!tuning.ignoreMinBufferTime } },
+        };
+      }
       return playbackConfig;
     });
 
     const options = new cast.framework.CastReceiverOptions();
     options.disableIdleTimeout = true; // flow-TV: keep the session alive between channel switches
     options.maxInactivity = 3600;
+    options.customNamespaces = { [NS]: cast.framework.system.MessageType.JSON };
     context.start(options);
   </script>
 </body>
